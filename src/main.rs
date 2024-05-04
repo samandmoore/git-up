@@ -11,15 +11,12 @@ use tap::Tap;
 fn main() -> Result<()> {
     env_logger::init();
 
-    // 1. get main remote
     let remote = git::get_main_remote()?;
 
-    // 2. get default branch
     let default_branch = git::get_default_branch(&remote)?;
 
     let full_default_branch = format!("refs/remotes/{}/{}", remote, default_branch);
 
-    // 3. get current branch
     let mut current_branch = git::symbolic_ref("HEAD", true).expect("Failed to get current branch");
 
     // 4. fetch from remote `git fetch --prune --quiet --progress $remote`
