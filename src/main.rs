@@ -31,7 +31,8 @@ fn main() -> Result<()> {
     debug!("Fetching from remote with command {:?}", command);
     command
         .spawn()
-        .with_context(|| "Failed to execute git fetch command")?;
+        .with_context(|| "Failed to execute git fetch command")?
+        .wait()?;
 
     // 5. gather list of branch -> remote mappings `git config --local --get-regexp branch.*.remote`
     let mut command = Command::new("git");
