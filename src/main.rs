@@ -6,6 +6,7 @@ use colored::*;
 use log::{debug, info};
 
 use anyhow::{Context, Result};
+use tap::Tap;
 
 fn main() -> Result<()> {
     env_logger::init();
@@ -21,35 +22,33 @@ fn main() -> Result<()> {
     let full_default_branch = format!("refs/remotes/{}/{}", remote, default_branch);
 
     // 4. fetch from remote `git fetch --prune --quiet --progress $remote`
-    let mut command = Command::new("git");
-    let command = command
+    Command::new("git")
         .arg("fetch")
         .arg("--prune")
         .arg("--quiet")
         .arg("--progress")
-        .arg(remote);
-
-    info!("Fetching from remote");
-    debug!("Fetching from remote with command {:?}", command);
-    command
+        .arg(remote)
+        .tap(|command| {
+            info!("Fetching from remote");
+            debug!("Fetching from remote with command {:?}", command);
+        })
         .spawn()
         .with_context(|| "Failed to execute git fetch command")?
         .wait()?;
 
     // 5. gather list of branch -> remote mappings `git config --local --get-regexp branch.*.remote`
-    let mut command = Command::new("git");
-    let command = command
+    let output = Command::new("git")
         .arg("config")
         .arg("--local")
         .arg("--get-regexp")
-        .arg("branch.*.remote");
-
-    info!("Getting branch -> remote mappings");
-    debug!(
-        "Getting branch -> remote mappings with command {:?}",
-        command
-    );
-    let output = command
+        .arg("branch.*.remote")
+        .tap(|command| {
+            info!("Getting branch -> remote mappings");
+            debug!(
+                "Getting branch -> remote mappings with command {:?}",
+                command
+            );
+        })
         .output()
         .with_context(|| "Failed to execute git config command")?;
 
@@ -67,13 +66,15 @@ fn main() -> Result<()> {
     debug!("Map of branches to remotes: {:?}", branches_to_remotes);
 
     // 6. gather list of local branches `git branch --list`
-    let mut command = Command::new("git");
-    let command = command.arg("branch").arg("--list");
-    info!("Getting local branches");
-    debug!("Getting local branches with command {:?}", command);
-    let output = command
+    let output = Command::new("git")
+        .arg("branch")
+        .arg("--list")
+        .tap(|command| {
+            info!("Getting local branches");
+            debug!("Getting local branches with command {:?}", command);
+        })
         .output()
-        .with_context(|| "Failed to execute git config command")?;
+        .with_context(|| "Failed to execute git branch command")?;
 
     let local_branches: Vec<String> = output
         .stdout
