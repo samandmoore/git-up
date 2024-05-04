@@ -14,12 +14,8 @@ fn main() -> Result<()> {
     // 1. get main remote
     let remote = git::get_main_remote()?;
 
-    // 2. get default branch, this will always be missing if you didn't `git clone` the repository
-    let default_branch = git::symbolic_ref(&format!("refs/remotes/{}/HEAD", remote), false)
-        .unwrap_or(format!("refs/remotes/{}/main", remote))
-        .strip_prefix(&format!("refs/remotes/{}/", remote))
-        .expect("Failed to get default branch")
-        .to_string();
+    // 2. get default branch
+    let default_branch = git::get_default_branch(&remote)?;
 
     let full_default_branch = format!("refs/remotes/{}/{}", remote, default_branch);
 

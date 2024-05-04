@@ -203,3 +203,13 @@ pub fn get_main_remote() -> Result<String> {
         return Err(anyhow!("No remotes found"));
     }
 }
+
+pub fn get_default_branch(remote: &str) -> Result<String> {
+    // the ref/remotes/X/HEAD ref will always be missing if you didn't `git clone` the repository
+    symbolic_ref(&format!("refs/remotes/{}/HEAD", remote), false)
+        // if it is missing, we assume "main"
+        .unwrap_or(format!("refs/remotes/{}/main", remote))
+        .strip_prefix(&format!("refs/remotes/{}/", remote))
+        .map(|s| s.to_string())
+        .ok_or(anyhow!("Failed to get default branch"))
+}
