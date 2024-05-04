@@ -12,14 +12,19 @@ fn main() -> Result<()> {
     env_logger::init();
 
     // 1. get main remote
-    let remote = "origin";
+    let remote = git::get_main_remote()?;
 
-    // 2. get default branch
-    let mut current_branch = String::new();
+    // 2. get default branch, this will always be missing if you didn't `git clone` the repository
+    let default_branch = git::symbolic_ref(&format!("refs/remotes/{}/HEAD", remote), false)
+        .unwrap_or(format!("refs/remotes/{}/main", remote))
+        .strip_prefix(&format!("refs/remotes/{}/", remote))
+        .expect("Failed to get default branch")
+        .to_string();
+
+    let full_default_branch = format!("refs/remotes/{}/{}", remote, default_branch);
 
     // 3. get current branch
-    let default_branch = "main";
-    let full_default_branch = format!("refs/remotes/{}/{}", remote, default_branch);
+    let mut current_branch = git::symbolic_ref("HEAD", true).expect("Failed to get current branch");
 
     // 4. fetch from remote `git fetch --prune --quiet --progress $remote`
     Command::new("git")
@@ -27,7 +32,7 @@ fn main() -> Result<()> {
         .arg("--prune")
         .arg("--quiet")
         .arg("--progress")
-        .arg(remote)
+        .arg(&remote)
         .tap(|command| {
             info!("Fetching from remote");
             debug!("Fetching from remote with command {:?}", command);
@@ -86,7 +91,7 @@ fn main() -> Result<()> {
     for local_branch in local_branches {
         let result = process_branch(
             &local_branch,
-            remote,
+            &remote,
             &current_branch,
             &branches_to_remotes,
             &default_branch,

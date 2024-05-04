@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use std::{io::BufRead, path::Path, process::Command};
+use tap::Tap;
 
 pub fn delete_branch(local_branch: &str) -> Result<()> {
     let result = Command::new("git")
@@ -155,5 +156,50 @@ pub fn symbolic_full_name(name: String) -> Option<String> {
             }
         }
         Err(_) => None,
+    }
+}
+
+pub fn symbolic_ref(name: &str, short: bool) -> Option<String> {
+    let result = Command::new("git")
+        .arg("symbolic-ref")
+        .arg("--quiet")
+        .tap_mut(|command| {
+            if short {
+                command.arg("--short");
+            }
+        })
+        .arg(name)
+        .output();
+
+    match result {
+        Ok(output) => {
+            if output.status.success() {
+                let stdout = String::from_utf8(output.stdout).unwrap();
+                Some(stdout.trim().to_string())
+            } else {
+                None
+            }
+        }
+        Err(_) => None,
+    }
+}
+
+pub fn get_main_remote() -> Result<String> {
+    let result = Command::new("git")
+        .arg("remote")
+        .arg("--verbose")
+        .output()?;
+
+    if result.status.success() {
+        // $ git remote --verbose
+        // origin  git@github.com:samandmoore/git-up.git (fetch)
+        // origin  git@github.com:samandmoore/git-up.git (push)
+        let lines = output_lines(result);
+        if lines.len() > 0 {
+            return Ok(lines[0].split_whitespace().next().unwrap().to_string());
+        }
+        return Err(anyhow!("No remotes found"));
+    } else {
+        return Err(anyhow!("No remotes found"));
     }
 }
