@@ -114,7 +114,7 @@ fn main() -> Result<()> {
 enum BranchStatus {
     RemoteBranchExists(String),
     RemoteBranchGone,
-    RemoteBranchPotentiallyUnmerged,
+    Unknown,
 }
 
 fn determine_branch_status(
@@ -136,7 +136,7 @@ fn determine_branch_status(
                 BranchStatus::RemoteBranchGone
             }
         } else if !git::has_file(&remote_branch) {
-            BranchStatus::RemoteBranchPotentiallyUnmerged
+            BranchStatus::Unknown
         } else {
             BranchStatus::RemoteBranchExists(remote_branch.clone())
         }
@@ -211,19 +211,18 @@ fn process_branch(
                 } else {
                     return Ok(None);
                 }
+            } else {
+                println!(
+                    "{} '{}'{} was deleted on {}, but appears not merged into '{}'",
+                    "Warning:".yellow(),
+                    local_branch.yellow().bold(),
+                    "".clear(),
+                    remote,
+                    current_branch,
+                );
             }
             Ok(None)
         }
-        BranchStatus::RemoteBranchPotentiallyUnmerged => {
-            println!(
-                "{} '{}'{} was deleted on {}, but appears not merged into '{}'",
-                "Warning:".yellow(),
-                local_branch.yellow().bold(),
-                "".clear(),
-                remote,
-                current_branch,
-            );
-            Ok(None)
-        }
+        BranchStatus::Unknown => Ok(None),
     }
 }
