@@ -17,7 +17,8 @@ fn main() -> Result<()> {
 
     let full_default_branch = format!("refs/remotes/{}/{}", remote, default_branch);
 
-    let mut current_branch = git::symbolic_ref("HEAD", true).expect("Failed to get current branch");
+    let mut current_branch =
+        git::symbolic_ref("HEAD", true).with_context(|| "Failed to get current branch")?;
 
     // 4. fetch from remote `git fetch --prune --quiet --progress $remote`
     Command::new("git")
@@ -148,31 +149,11 @@ fn process_branch(
             return Ok(None);
         } else if diff.is_ancestor() {
             if local_branch == current_branch {
-                match git::fast_forward_merge(&remote_branch) {
-                    Err(e) => {
-                        println!(
-                            "{} {}{} failed to fast forward merge: {}",
-                            "Error:".red(),
-                            local_branch.red().bold(),
-                            "".clear(),
-                            e
-                        );
-                    }
-                    _ => {}
-                }
+                git::fast_forward_merge(&remote_branch)
+                    .with_context(|| "failed to fast forward merge")?;
             } else {
-                match git::update_ref(&full_branch, &remote_branch) {
-                    Err(e) => {
-                        println!(
-                            "{} {}{} failed to update ref: {}",
-                            "Error:".red(),
-                            local_branch.red().bold(),
-                            "".clear(),
-                            e
-                        );
-                    }
-                    _ => {}
-                }
+                git::update_ref(&full_branch, &remote_branch)
+                    .with_context(|| "failed to update ref")?;
             }
             println!(
                 "{} {}{} (was {}).",
@@ -195,9 +176,10 @@ fn process_branch(
         let diff = git::make_range(&full_branch, &full_default_branch)?;
         if diff.is_ancestor() {
             if local_branch == current_branch {
-                git::checkout(default_branch)?;
+                git::checkout(default_branch)
+                    .with_context(|| "failed to checkout default branch")?;
             }
-            git::delete_branch(&local_branch)?;
+            git::delete_branch(&local_branch).with_context(|| "failed to delete local branch")?;
             println!(
                 "{} {}{} (was {}).",
                 "Deleted branch".red(),
