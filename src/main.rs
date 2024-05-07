@@ -113,8 +113,8 @@ fn main() -> Result<()> {
 
 enum BranchStatus {
     RemoteBranchExists(String),
-    RemoteBranchMerged,
-    RemotedBranchPotentiallyUnmerged,
+    RemoteBranchGone,
+    RemoteBranchPotentiallyUnmerged,
 }
 
 fn determine_branch_status(
@@ -133,10 +133,10 @@ fn determine_branch_status(
                 BranchStatus::RemoteBranchExists(symbolic_full_name)
             } else {
                 debug!("No symbolic full name found for {}", local_branch);
-                BranchStatus::RemoteBranchMerged
+                BranchStatus::RemoteBranchGone
             }
         } else if !git::has_file(&remote_branch) {
-            BranchStatus::RemotedBranchPotentiallyUnmerged
+            BranchStatus::RemoteBranchPotentiallyUnmerged
         } else {
             BranchStatus::RemoteBranchExists(remote_branch.clone())
         }
@@ -190,7 +190,7 @@ fn process_branch(
                 Ok(None)
             }
         }
-        BranchStatus::RemoteBranchMerged => {
+        BranchStatus::RemoteBranchGone => {
             let diff = git::make_range(&full_branch, &full_default_branch)?;
             if diff.is_ancestor() {
                 if local_branch == current_branch {
@@ -214,7 +214,7 @@ fn process_branch(
             }
             Ok(None)
         }
-        BranchStatus::RemotedBranchPotentiallyUnmerged => {
+        BranchStatus::RemoteBranchPotentiallyUnmerged => {
             println!(
                 "{} '{}'{} was deleted on {}, but appears not merged into '{}'",
                 "Warning:".yellow(),
