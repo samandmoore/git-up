@@ -12,15 +12,11 @@ fn main() -> Result<()> {
     env_logger::init();
 
     let remote = git::get_main_remote()?;
-
     let default_branch = git::get_default_branch(&remote)?;
-
     let full_default_branch = format!("refs/remotes/{}/{}", remote, default_branch);
-
-    let mut current_branch =
+    let current_branch =
         git::symbolic_ref("HEAD", true).with_context(|| "Failed to get current branch")?;
 
-    // 4. fetch from remote `git fetch --prune --quiet --progress $remote`
     Command::new("git")
         .arg("fetch")
         .arg("--prune")
@@ -35,7 +31,6 @@ fn main() -> Result<()> {
         .with_context(|| "Failed to execute git fetch command")?
         .wait()?;
 
-    // 5. gather list of branch -> remote mappings `git config --local --get-regexp branch.*.remote`
     let output = Command::new("git")
         .arg("config")
         .arg("--local")
@@ -81,19 +76,19 @@ fn main() -> Result<()> {
         .map(|line| String::from(line.unwrap().trim().split(' ').last().unwrap()))
         .collect();
 
-    // 7. loop over branches, updating local if remote has changed, delete if merged, warn if not merged
+    let mut sync_context = SyncContext {
+        remote: remote.clone(),
+        default_branch: default_branch.clone(),
+        full_default_branch: full_default_branch.clone(),
+        current_branch: current_branch.clone(),
+        branches_to_remotes: branches_to_remotes.clone(),
+    };
+
     for local_branch in local_branches {
-        let result = process_branch(
-            &local_branch,
-            &remote,
-            &current_branch,
-            &branches_to_remotes,
-            &default_branch,
-            &full_default_branch,
-        );
+        let result = process_branch(&local_branch, &sync_context);
         match result {
             Ok(Some(branch)) => {
-                current_branch = branch;
+                sync_context.current_branch = branch;
             }
             Ok(None) => {}
             Err(e) => {
@@ -111,17 +106,26 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+struct SyncContext {
+    remote: String,
+    default_branch: String,
+    full_default_branch: String,
+    current_branch: String,
+    branches_to_remotes: HashMap<String, String>,
+}
+
 enum BranchStatus {
     RemoteBranchExists(String),
     RemoteBranchGone,
     Unknown,
 }
 
-fn determine_branch_status(
-    local_branch: &str,
-    remote: &str,
-    branches_to_remotes: &HashMap<String, String>,
-) -> BranchStatus {
+fn determine_branch_status(local_branch: &str, sync_context: &SyncContext) -> BranchStatus {
+    let SyncContext {
+        remote,
+        branches_to_remotes,
+        ..
+    } = sync_context;
     let remote_branch = format!("refs/remotes/{}/{}", remote, local_branch);
 
     if let Some(local_branch_remote_name) = branches_to_remotes.get(local_branch) {
@@ -145,18 +149,18 @@ fn determine_branch_status(
     }
 }
 
-fn process_branch(
-    local_branch: &str,
-    remote: &str,
-    current_branch: &str,
-    branches_to_remotes: &HashMap<String, String>,
-    default_branch: &str,
-    full_default_branch: &str,
-) -> Result<Option<String>> {
+fn process_branch(local_branch: &str, sync_context: &SyncContext) -> Result<Option<String>> {
     let full_branch = format!("refs/heads/{}", local_branch);
+    let SyncContext {
+        remote,
+        default_branch,
+        full_default_branch,
+        current_branch,
+        ..
+    } = sync_context;
 
     info!("Checking branch {}", local_branch);
-    let branch_status = determine_branch_status(local_branch, remote, branches_to_remotes);
+    let branch_status = determine_branch_status(local_branch, sync_context);
 
     match branch_status {
         BranchStatus::RemoteBranchExists(remote_branch) => {
