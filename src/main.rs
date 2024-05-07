@@ -111,6 +111,40 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+enum BranchStatus {
+    RemoteBranchExists(String),
+    RemoteBranchMerged,
+    RemotedBranchPotentiallyUnmerged,
+}
+
+fn determine_branch_status(
+    local_branch: &str,
+    remote: &str,
+    branches_to_remotes: &HashMap<String, String>,
+) -> BranchStatus {
+    let remote_branch = format!("refs/remotes/{}/{}", remote, local_branch);
+
+    if let Some(local_branch_remote_name) = branches_to_remotes.get(local_branch) {
+        if local_branch_remote_name == remote {
+            if let Some(symbolic_full_name) =
+                git::symbolic_full_name(format!("{}@{{upstream}}", local_branch))
+            {
+                debug!("Symbolic full name is {}", symbolic_full_name);
+                BranchStatus::RemoteBranchExists(symbolic_full_name)
+            } else {
+                debug!("No symbolic full name found for {}", local_branch);
+                BranchStatus::RemoteBranchMerged
+            }
+        } else if !git::has_file(&remote_branch) {
+            BranchStatus::RemotedBranchPotentiallyUnmerged
+        } else {
+            BranchStatus::RemoteBranchExists(remote_branch.clone())
+        }
+    } else {
+        BranchStatus::RemoteBranchExists(remote_branch.clone())
+    }
+}
+
 fn process_branch(
     local_branch: &str,
     remote: &str,
@@ -120,89 +154,76 @@ fn process_branch(
     full_default_branch: &str,
 ) -> Result<Option<String>> {
     let full_branch = format!("refs/heads/{}", local_branch);
-    let mut remote_branch = format!("refs/remotes/{}/{}", remote, local_branch);
-    let mut gone = false;
 
     info!("Checking branch {}", local_branch);
-    if let Some(local_branch_remote_name) = branches_to_remotes.get(local_branch) {
-        if local_branch_remote_name == remote {
-            if let Some(symbolic_full_name) =
-                git::symbolic_full_name(format!("{}@{{upstream}}", local_branch))
-            {
-                debug!("Symbolic full name is {}", symbolic_full_name);
-                remote_branch = symbolic_full_name;
+    let branch_status = determine_branch_status(local_branch, remote, branches_to_remotes);
+
+    match branch_status {
+        BranchStatus::RemoteBranchExists(remote_branch) => {
+            let diff = git::make_range(&full_branch, &remote_branch)?;
+
+            if diff.is_identical() {
+                return Ok(None);
+            } else if diff.is_ancestor() {
+                if local_branch == current_branch {
+                    git::fast_forward_merge(&remote_branch)
+                        .with_context(|| "failed to fast forward merge")?;
+                } else {
+                    git::update_ref(&full_branch, &remote_branch)
+                        .with_context(|| "failed to update ref")?;
+                }
+                println!(
+                    "{} {}{} (was {}).",
+                    "Updated branch".green(),
+                    local_branch.green().bold(),
+                    "".clear(),
+                    diff.a[0..7].to_string(),
+                );
+                Ok(None)
             } else {
-                debug!("No symbolic full name found for {}", local_branch);
-                remote_branch = String::new();
-                gone = true;
+                println!(
+                    "{} {}{} seems to contain unpushed commits",
+                    "Warning:".yellow(),
+                    local_branch.yellow().bold(),
+                    "".clear()
+                );
+                Ok(None)
             }
-            debug!("Remote is {}", local_branch_remote_name);
-        } else if !git::has_file(&remote_branch) {
-            remote_branch = String::new();
         }
-    }
-
-    if !remote_branch.is_empty() {
-        let diff = git::make_range(&full_branch, &remote_branch)?;
-
-        if diff.is_identical() {
-            return Ok(None);
-        } else if diff.is_ancestor() {
-            if local_branch == current_branch {
-                git::fast_forward_merge(&remote_branch)
-                    .with_context(|| "failed to fast forward merge")?;
-            } else {
-                git::update_ref(&full_branch, &remote_branch)
-                    .with_context(|| "failed to update ref")?;
+        BranchStatus::RemoteBranchMerged => {
+            let diff = git::make_range(&full_branch, &full_default_branch)?;
+            if diff.is_ancestor() {
+                if local_branch == current_branch {
+                    git::checkout(default_branch)
+                        .with_context(|| "failed to checkout default branch")?;
+                }
+                git::delete_branch(&local_branch)
+                    .with_context(|| "failed to delete local branch")?;
+                println!(
+                    "{} {}{} (was {}).",
+                    "Deleted branch".red(),
+                    local_branch.red().bold(),
+                    "".clear(),
+                    diff.a[0..7].to_string(),
+                );
+                if local_branch == current_branch {
+                    return Ok(Some(String::from(default_branch)));
+                } else {
+                    return Ok(None);
+                }
             }
-            println!(
-                "{} {}{} (was {}).",
-                "Updated branch".green(),
-                local_branch.green().bold(),
-                "".clear(),
-                diff.a[0..7].to_string(),
-            );
             Ok(None)
-        } else {
+        }
+        BranchStatus::RemotedBranchPotentiallyUnmerged => {
             println!(
-                "{} {}{} seems to contain unpushed commits",
+                "{} '{}'{} was deleted on {}, but appears not merged into '{}'",
                 "Warning:".yellow(),
                 local_branch.yellow().bold(),
-                "".clear()
+                "".clear(),
+                remote,
+                current_branch,
             );
             Ok(None)
         }
-    } else if gone {
-        let diff = git::make_range(&full_branch, &full_default_branch)?;
-        if diff.is_ancestor() {
-            if local_branch == current_branch {
-                git::checkout(default_branch)
-                    .with_context(|| "failed to checkout default branch")?;
-            }
-            git::delete_branch(&local_branch).with_context(|| "failed to delete local branch")?;
-            println!(
-                "{} {}{} (was {}).",
-                "Deleted branch".red(),
-                local_branch.red().bold(),
-                "".clear(),
-                diff.a[0..7].to_string(),
-            );
-            if local_branch == current_branch {
-                return Ok(Some(String::from(default_branch)));
-            } else {
-                return Ok(None);
-            }
-        }
-        Ok(None)
-    } else {
-        println!(
-            "{} '{}'{} was deleted on {}, but appears not merged into '{}'",
-            "Warning:".yellow(),
-            local_branch.yellow().bold(),
-            "".clear(),
-            remote,
-            current_branch,
-        );
-        Ok(None)
     }
 }
