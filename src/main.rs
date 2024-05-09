@@ -14,8 +14,6 @@ fn main() -> Result<()> {
     let remote = git::get_main_remote()?;
     let default_branch = git::get_default_branch(&remote)?;
     let full_default_branch = format!("refs/remotes/{}/{}", remote, default_branch);
-    let current_branch =
-        git::symbolic_ref("HEAD", true).with_context(|| "Failed to get current branch")?;
 
     Command::new("git")
         .arg("fetch")
@@ -59,7 +57,6 @@ fn main() -> Result<()> {
         .collect();
     debug!("Map of branches to remotes: {:?}", branches_to_remotes);
 
-    // 6. gather list of local branches `git branch --list`
     let output = Command::new("git")
         .arg("branch")
         .arg("--list")
@@ -76,21 +73,20 @@ fn main() -> Result<()> {
         .map(|line| String::from(line.unwrap().trim().split(' ').last().unwrap()))
         .collect();
 
-    let mut sync_context = SyncContext {
-        remote: remote.clone(),
-        default_branch: default_branch.clone(),
-        full_default_branch: full_default_branch.clone(),
-        current_branch: current_branch.clone(),
-        branches_to_remotes: branches_to_remotes.clone(),
-    };
-
     for local_branch in local_branches {
-        let result = process_branch(&local_branch, &sync_context);
+        let current_branch =
+            git::symbolic_ref("HEAD", true).with_context(|| "Failed to get current branch")?;
+        let sync_context = SyncContext {
+            remote: remote.clone(),
+            default_branch: default_branch.clone(),
+            full_default_branch: full_default_branch.clone(),
+            local_branch: local_branch.clone(),
+            current_branch: current_branch,
+            branches_to_remotes: branches_to_remotes.clone(),
+        };
+        let result = process_branch(&sync_context);
         match result {
-            Ok(Some(branch)) => {
-                sync_context.current_branch = branch;
-            }
-            Ok(None) => {}
+            Ok(_) => {}
             Err(e) => {
                 println!(
                     "{} {}{} failed to process branch: {}",
@@ -110,6 +106,7 @@ struct SyncContext {
     remote: String,
     default_branch: String,
     full_default_branch: String,
+    local_branch: String,
     current_branch: String,
     branches_to_remotes: HashMap<String, String>,
 }
@@ -120,9 +117,10 @@ enum BranchStatus {
     Unknown,
 }
 
-fn determine_branch_status(local_branch: &str, sync_context: &SyncContext) -> BranchStatus {
+fn determine_branch_status(sync_context: &SyncContext) -> BranchStatus {
     let SyncContext {
         remote,
+        local_branch,
         branches_to_remotes,
         ..
     } = sync_context;
@@ -149,26 +147,27 @@ fn determine_branch_status(local_branch: &str, sync_context: &SyncContext) -> Br
     }
 }
 
-fn process_branch(local_branch: &str, sync_context: &SyncContext) -> Result<Option<String>> {
-    let full_branch = format!("refs/heads/{}", local_branch);
+fn process_branch(sync_context: &SyncContext) -> Result<()> {
     let SyncContext {
         remote,
         default_branch,
         full_default_branch,
+        local_branch,
         current_branch,
         ..
     } = sync_context;
+    let full_branch = format!("refs/heads/{}", local_branch);
 
     info!("Checking branch {}", local_branch);
-    let branch_status = determine_branch_status(local_branch, sync_context);
+    let branch_status = determine_branch_status(sync_context);
 
     match branch_status {
         BranchStatus::RemoteBranchExists(remote_branch) => {
-            let diff = git::make_range(&full_branch, &remote_branch)?;
+            let range = git::make_range(&full_branch, &remote_branch)?;
 
-            if diff.is_identical() {
-                return Ok(None);
-            } else if diff.is_ancestor() {
+            if range.is_identical() {
+                return Ok(());
+            } else if range.is_ancestor() {
                 if local_branch == current_branch {
                     git::fast_forward_merge(&remote_branch)
                         .with_context(|| "failed to fast forward merge")?;
@@ -181,9 +180,9 @@ fn process_branch(local_branch: &str, sync_context: &SyncContext) -> Result<Opti
                     "Updated branch".green(),
                     local_branch.green().bold(),
                     "".clear(),
-                    diff.a[0..7].to_string(),
+                    range.a[0..7].to_string(),
                 );
-                Ok(None)
+                Ok(())
             } else {
                 println!(
                     "{} {}{} seems to contain unpushed commits",
@@ -191,12 +190,12 @@ fn process_branch(local_branch: &str, sync_context: &SyncContext) -> Result<Opti
                     local_branch.yellow().bold(),
                     "".clear()
                 );
-                Ok(None)
+                Ok(())
             }
         }
         BranchStatus::RemoteBranchGone => {
-            let diff = git::make_range(&full_branch, &full_default_branch)?;
-            if diff.is_ancestor() {
+            let range = git::make_range(&full_branch, &full_default_branch)?;
+            if range.is_ancestor() {
                 if local_branch == current_branch {
                     git::checkout(default_branch)
                         .with_context(|| "failed to checkout default branch")?;
@@ -208,13 +207,8 @@ fn process_branch(local_branch: &str, sync_context: &SyncContext) -> Result<Opti
                     "Deleted branch".red(),
                     local_branch.red().bold(),
                     "".clear(),
-                    diff.a[0..7].to_string(),
+                    range.a[0..7].to_string(),
                 );
-                if local_branch == current_branch {
-                    return Ok(Some(String::from(default_branch)));
-                } else {
-                    return Ok(None);
-                }
             } else {
                 println!(
                     "{} {}{} was deleted on {}, but appears not merged into {}",
@@ -225,8 +219,8 @@ fn process_branch(local_branch: &str, sync_context: &SyncContext) -> Result<Opti
                     default_branch.bold(),
                 );
             }
-            Ok(None)
+            Ok(())
         }
-        BranchStatus::Unknown => Ok(None),
+        BranchStatus::Unknown => Ok(()),
     }
 }
