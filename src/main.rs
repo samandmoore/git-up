@@ -15,19 +15,7 @@ fn main() -> Result<()> {
     let default_branch = git::get_default_branch(&remote)?;
     let full_default_branch = format!("refs/remotes/{}/{}", remote, default_branch);
 
-    Command::new("git")
-        .arg("fetch")
-        .arg("--prune")
-        .arg("--quiet")
-        .arg("--progress")
-        .arg(&remote)
-        .tap(|command| {
-            info!("Fetching from remote");
-            debug!("Fetching from remote with command {:?}", command);
-        })
-        .spawn()
-        .with_context(|| "Failed to execute git fetch command")?
-        .wait()?;
+    git::fetch(&remote).with_context(|| "Failed to execute git fetch command")?;
 
     let output = Command::new("git")
         .arg("config")
@@ -117,33 +105,35 @@ enum BranchStatus {
     Unknown,
 }
 
-fn determine_branch_status(sync_context: &SyncContext) -> BranchStatus {
-    let SyncContext {
-        remote,
-        local_branch,
-        branches_to_remotes,
-        ..
-    } = sync_context;
-    let remote_branch = format!("refs/remotes/{}/{}", remote, local_branch);
+impl SyncContext {
+    fn determine_branch_status(&self) -> BranchStatus {
+        let SyncContext {
+            remote,
+            local_branch,
+            branches_to_remotes,
+            ..
+        } = self;
+        let remote_branch = format!("refs/remotes/{}/{}", remote, local_branch);
 
-    if let Some(local_branch_remote_name) = branches_to_remotes.get(local_branch) {
-        if local_branch_remote_name == remote {
-            if let Some(symbolic_full_name) =
-                git::symbolic_full_name(format!("{}@{{upstream}}", local_branch))
-            {
-                debug!("Symbolic full name is {}", symbolic_full_name);
-                BranchStatus::RemoteBranchExists(symbolic_full_name)
+        if let Some(local_branch_remote_name) = branches_to_remotes.get(local_branch) {
+            if local_branch_remote_name == remote {
+                if let Some(symbolic_full_name) =
+                    git::symbolic_full_name(format!("{}@{{upstream}}", local_branch))
+                {
+                    debug!("Symbolic full name is {}", symbolic_full_name);
+                    BranchStatus::RemoteBranchExists(symbolic_full_name)
+                } else {
+                    debug!("No symbolic full name found for {}", local_branch);
+                    BranchStatus::RemoteBranchGone
+                }
+            } else if !git::has_file(&remote_branch) {
+                BranchStatus::Unknown
             } else {
-                debug!("No symbolic full name found for {}", local_branch);
-                BranchStatus::RemoteBranchGone
+                BranchStatus::RemoteBranchExists(remote_branch.clone())
             }
-        } else if !git::has_file(&remote_branch) {
-            BranchStatus::Unknown
         } else {
             BranchStatus::RemoteBranchExists(remote_branch.clone())
         }
-    } else {
-        BranchStatus::RemoteBranchExists(remote_branch.clone())
     }
 }
 
@@ -159,7 +149,7 @@ fn process_branch(sync_context: &SyncContext) -> Result<()> {
     let full_branch = format!("refs/heads/{}", local_branch);
 
     info!("Checking branch {}", local_branch);
-    let branch_status = determine_branch_status(sync_context);
+    let branch_status = sync_context.determine_branch_status();
 
     match branch_status {
         BranchStatus::RemoteBranchExists(remote_branch) => {

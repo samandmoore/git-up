@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use log::{debug, info};
 use std::{io::BufRead, path::Path, process::Command};
 use tap::Tap;
 
@@ -212,4 +213,26 @@ pub fn get_default_branch(remote: &str) -> Result<String> {
         .strip_prefix(&format!("refs/remotes/{}/", remote))
         .map(|s| s.to_string())
         .ok_or(anyhow!("Failed to get default branch"))
+}
+
+pub fn fetch(remote: &str) -> Result<()> {
+    let success = Command::new("git")
+        .arg("fetch")
+        .arg("--prune")
+        .arg("--quiet")
+        .arg("--progress")
+        .arg(remote)
+        .tap(|command| {
+            info!("Fetching from remote");
+            debug!("Fetching from remote with command {:?}", command);
+        })
+        .spawn()?
+        .wait()?
+        .success();
+
+    if success {
+        Ok(())
+    } else {
+        Err(anyhow!("Failed to fetch from remote"))
+    }
 }
