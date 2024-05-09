@@ -1,12 +1,11 @@
 mod git;
 
-use std::{collections::HashMap, io::BufRead, process::Command};
+use std::collections::HashMap;
 
 use colored::*;
 use log::{debug, info};
 
 use anyhow::{Context, Result};
-use tap::Tap;
 
 fn main() -> Result<()> {
     env_logger::init();
@@ -17,26 +16,13 @@ fn main() -> Result<()> {
 
     git::fetch(&remote).with_context(|| "Failed to execute git fetch command")?;
 
-    let output = Command::new("git")
-        .arg("config")
-        .arg("--local")
-        .arg("--get-regexp")
-        .arg("branch.*.remote")
-        .tap(|command| {
-            info!("Getting branch -> remote mappings");
-            debug!(
-                "Getting branch -> remote mappings with command {:?}",
-                command
-            );
-        })
-        .output()
+    let branch_remotes_lines = git::get_config(&vec!["--local", "--get-regexp", "branch.*.remote"])
         .with_context(|| "Failed to execute git config command")?;
 
-    let branches_to_remotes: HashMap<String, String> = output
-        .stdout
-        .lines()
+    let branches_to_remotes: HashMap<String, String> = branch_remotes_lines
+        .iter()
         .map(|line| {
-            let parts: Vec<String> = line.unwrap().split(' ').map(String::from).collect();
+            let parts: Vec<String> = line.split(' ').map(String::from).collect();
             (
                 parts[0].split('.').skip(1).take(1).collect(),
                 parts[1].clone(),
@@ -45,21 +31,7 @@ fn main() -> Result<()> {
         .collect();
     debug!("Map of branches to remotes: {:?}", branches_to_remotes);
 
-    let output = Command::new("git")
-        .arg("branch")
-        .arg("--list")
-        .tap(|command| {
-            info!("Getting local branches");
-            debug!("Getting local branches with command {:?}", command);
-        })
-        .output()
-        .with_context(|| "Failed to execute git branch command")?;
-
-    let local_branches: Vec<String> = output
-        .stdout
-        .lines()
-        .map(|line| String::from(line.unwrap().trim().split(' ').last().unwrap()))
-        .collect();
+    let local_branches = git::get_branches().with_context(|| "Failed to get local branches")?;
 
     for local_branch in local_branches {
         let current_branch =

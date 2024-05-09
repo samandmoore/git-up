@@ -5,7 +5,7 @@ use std::{
     path::Path,
     process::{Command, Output},
 };
-use tap::Tap;
+use tap::{Tap, TapFallible};
 
 pub fn delete_branch(local_branch: &str) -> Result<()> {
     let result = Command::new("git")
@@ -230,6 +230,34 @@ pub fn fetch(remote: &str) -> Result<()> {
         .with_context(|| "Failed to execute git fetch command")
 }
 
+pub fn get_config(args: &[&str]) -> Result<Vec<String>> {
+    let result = Command::new("git")
+        .arg("config")
+        .args(args)
+        .run_for_output()?;
+
+    if result.status.success() {
+        Ok(output_lines(result))
+    } else {
+        Err(anyhow!("Failed to get config"))
+    }
+}
+
+pub fn get_branches() -> Result<Vec<String>> {
+    let result = Command::new("git")
+        .arg("branch")
+        .arg("--list")
+        .arg("--format")
+        .arg("%(refname:short)")
+        .run_for_output()?;
+
+    if result.status.success() {
+        Ok(output_lines(result))
+    } else {
+        Err(anyhow!("Failed to get branches"))
+    }
+}
+
 trait Runnable {
     fn run_for_output(&mut self) -> Result<Output>;
     fn run(&mut self) -> Result<()>;
@@ -237,12 +265,16 @@ trait Runnable {
 
 impl Runnable for Command {
     fn run_for_output(&mut self) -> Result<Output> {
-        debug!("Running command {:?}", self);
-        self.output().with_context(|| "Failed to execute command")
+        debug!("Running command: {:?}", self);
+        self.output()
+            .tap_ok(|output| {
+                debug!("Command result: {:?}", output);
+            })
+            .with_context(|| "Failed to execute command")
     }
 
     fn run(&mut self) -> Result<()> {
-        debug!("Running command {:?}", self);
+        debug!("Running command: {:?}", self);
         let result = self
             .spawn()?
             .wait()
