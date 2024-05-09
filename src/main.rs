@@ -217,12 +217,12 @@ fn process_branch(local_branch: &str, sync_context: &SyncContext) -> Result<Opti
                 }
             } else {
                 println!(
-                    "{} '{}'{} was deleted on {}, but appears not merged into '{}'",
+                    "{} {}{} was deleted on {}, but appears not merged into {}",
                     "Warning:".yellow(),
                     local_branch.yellow().bold(),
                     "".clear(),
                     remote,
-                    current_branch,
+                    default_branch.bold(),
                 );
             }
             Ok(None)
