@@ -13,7 +13,7 @@ pub fn delete_branch(local_branch: &str) -> Result<()> {
         .arg("-D")
         .arg("--quiet")
         .arg(local_branch)
-        .output()?;
+        .run_for_output()?;
 
     if result.status.success() {
         Ok(())
@@ -27,7 +27,7 @@ pub fn checkout(branch: &str) -> Result<()> {
         .arg("checkout")
         .arg("--quiet")
         .arg(branch)
-        .output()?;
+        .run_for_output()?;
 
     if result.status.success() {
         Ok(())
@@ -41,7 +41,7 @@ pub fn update_ref(full_branch: &str, remote_branch: &str) -> Result<()> {
         .arg("update-ref")
         .arg(full_branch)
         .arg(remote_branch)
-        .output()?;
+        .run_for_output()?;
 
     if result.status.success() {
         Ok(())
@@ -56,7 +56,7 @@ pub fn fast_forward_merge(branch: &str) -> Result<()> {
         .arg("--ff-only")
         .arg("--quiet")
         .arg(branch)
-        .output()?;
+        .run_for_output()?;
 
     if result.status.success() {
         Ok(())
@@ -90,7 +90,7 @@ fn is_ancestor(a: &str, b: &str) -> bool {
         .arg("--is-ancestor")
         .arg(a)
         .arg(b)
-        .output();
+        .run_for_output();
 
     match result {
         Ok(output) => output.status.success(),
@@ -104,7 +104,7 @@ pub fn make_range(a: &str, b: &str) -> Result<Range> {
         .arg("--quiet")
         .arg(a)
         .arg(b)
-        .output()?;
+        .run_for_output()?;
 
     let lines = output_lines(result);
     if lines.len() != 2 {
@@ -129,7 +129,7 @@ pub fn has_file(path: &str) -> bool {
         .arg("--quiet")
         .arg("--git-path")
         .arg(path)
-        .output();
+        .run_for_output();
 
     match result {
         Ok(output) => {
@@ -149,7 +149,7 @@ pub fn symbolic_full_name(name: String) -> Option<String> {
         .arg("rev-parse")
         .arg("--symbolic-full-name")
         .arg(name)
-        .output();
+        .run_for_output();
 
     match result {
         Ok(output) => {
@@ -174,7 +174,7 @@ pub fn symbolic_ref(name: &str, short: bool) -> Option<String> {
             }
         })
         .arg(name)
-        .output();
+        .run_for_output();
 
     match result {
         Ok(output) => {
@@ -193,7 +193,7 @@ pub fn get_main_remote() -> Result<String> {
     let result = Command::new("git")
         .arg("remote")
         .arg("--verbose")
-        .output()?;
+        .run_for_output()?;
 
     if result.status.success() {
         // $ git remote --verbose
