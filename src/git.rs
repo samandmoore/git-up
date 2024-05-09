@@ -1,6 +1,10 @@
-use anyhow::{anyhow, Result};
-use log::{debug, info};
-use std::{io::BufRead, path::Path, process::Command};
+use anyhow::{anyhow, Context, Result};
+use log::debug;
+use std::{
+    io::BufRead,
+    path::Path,
+    process::{Command, Output},
+};
 use tap::Tap;
 
 pub fn delete_branch(local_branch: &str) -> Result<()> {
@@ -216,23 +220,38 @@ pub fn get_default_branch(remote: &str) -> Result<String> {
 }
 
 pub fn fetch(remote: &str) -> Result<()> {
-    let success = Command::new("git")
+    Command::new("git")
         .arg("fetch")
         .arg("--prune")
         .arg("--quiet")
         .arg("--progress")
         .arg(remote)
-        .tap(|command| {
-            info!("Fetching from remote");
-            debug!("Fetching from remote with command {:?}", command);
-        })
-        .spawn()?
-        .wait()?
-        .success();
+        .run()
+        .with_context(|| "Failed to execute git fetch command")
+}
 
-    if success {
-        Ok(())
-    } else {
-        Err(anyhow!("Failed to fetch from remote"))
+trait Runnable {
+    fn run_for_output(&mut self) -> Result<Output>;
+    fn run(&mut self) -> Result<()>;
+}
+
+impl Runnable for Command {
+    fn run_for_output(&mut self) -> Result<Output> {
+        debug!("Running command {:?}", self);
+        self.output().with_context(|| "Failed to execute command")
+    }
+
+    fn run(&mut self) -> Result<()> {
+        debug!("Running command {:?}", self);
+        let result = self
+            .spawn()?
+            .wait()
+            .with_context(|| "Failed to execute command")?;
+
+        if result.success() {
+            Ok(())
+        } else {
+            Err(anyhow!("Failed to execute command"))
+        }
     }
 }
