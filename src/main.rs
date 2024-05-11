@@ -2,6 +2,7 @@ mod git;
 
 use std::collections::HashMap;
 
+use clap::{crate_description, crate_name, crate_version, Command};
 use colored::*;
 use log::{debug, info};
 
@@ -9,6 +10,11 @@ use anyhow::{Context, Result};
 
 fn main() -> Result<()> {
     env_logger::init();
+
+    Command::new(crate_name!())
+        .version(crate_version!())
+        .about(crate_description!())
+        .get_matches();
 
     let remote = git::get_main_remote()?;
     let default_branch = git::get_default_branch(&remote)?;
