@@ -92,7 +92,7 @@ jobs:
       - name: Build release binary
         shell: bash
         run: |
-          ${{ env.CARGO }} build --verbose --release
+          ${{ env.CARGO }} build --verbose --release ${{ env.TARGET_FLAGS }}
           bin="target/${{ matrix.target }}/release/git-up"
           echo "BIN=$bin" >> $GITHUB_ENV
 
