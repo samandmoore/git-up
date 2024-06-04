@@ -14,5 +14,7 @@ tap 'samandmoore/git-up', 'https://github.com/samandmoore/git-up'
 
 or manually with `brew`
 
+```
 $ brew tap samandmoore/git-up
 $ brew install git-up https://github.com/samandmoore/git-up
+```
