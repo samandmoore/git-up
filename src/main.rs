@@ -22,7 +22,7 @@ fn main() -> Result<()> {
 
     git::fetch(&remote).with_context(|| "Failed to execute git fetch command")?;
 
-    let branch_remotes_lines = git::get_config(&vec!["--local", "--get-regexp", "branch.*.remote"])
+    let branch_remotes_lines = git::get_config(&["--local", "--get-regexp", "branch.*.remote"])
         .with_context(|| "Failed to execute git config command")?;
 
     let branches_to_remotes: HashMap<String, String> = branch_remotes_lines
@@ -47,7 +47,7 @@ fn main() -> Result<()> {
             default_branch: default_branch.clone(),
             full_default_branch: full_default_branch.clone(),
             local_branch: local_branch.clone(),
-            current_branch: current_branch,
+            current_branch,
             branches_to_remotes: branches_to_remotes.clone(),
         };
         let result = process_branch(&sync_context);
@@ -134,7 +134,7 @@ fn process_branch(sync_context: &SyncContext) -> Result<()> {
             let range = git::make_range(&full_branch, &remote_branch)?;
 
             if range.is_identical() {
-                return Ok(());
+                Ok(())
             } else if range.is_ancestor() {
                 if local_branch == current_branch {
                     git::fast_forward_merge(&remote_branch)
@@ -148,7 +148,7 @@ fn process_branch(sync_context: &SyncContext) -> Result<()> {
                     "Updated branch".green(),
                     local_branch.green().bold(),
                     "".clear(),
-                    range.a[0..7].to_string(),
+                    &range.a[0..7],
                 );
                 Ok(())
             } else {
@@ -162,20 +162,20 @@ fn process_branch(sync_context: &SyncContext) -> Result<()> {
             }
         }
         BranchStatus::RemoteBranchGone => {
-            let range = git::make_range(&full_branch, &full_default_branch)?;
+            let range = git::make_range(&full_branch, full_default_branch)?;
             if range.is_ancestor() {
                 if local_branch == current_branch {
                     git::checkout(default_branch)
                         .with_context(|| "failed to checkout default branch")?;
                 }
-                git::delete_branch(&local_branch)
+                git::delete_branch(local_branch)
                     .with_context(|| "failed to delete local branch")?;
                 println!(
                     "{} {}{} (was {}).",
                     "Deleted branch".red(),
                     local_branch.red().bold(),
                     "".clear(),
-                    range.a[0..7].to_string(),
+                    &range.a[0..7],
                 );
             } else {
                 println!(

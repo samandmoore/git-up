@@ -200,12 +200,12 @@ pub fn get_main_remote() -> Result<String> {
         // origin  git@github.com:samandmoore/git-up.git (fetch)
         // origin  git@github.com:samandmoore/git-up.git (push)
         let lines = output_lines(result);
-        if lines.len() > 0 {
+        if !lines.is_empty() {
             return Ok(lines[0].split_whitespace().next().unwrap().to_string());
         }
-        return Err(anyhow!("No remotes found"));
+        Err(anyhow!("No remotes found"))
     } else {
-        return Err(anyhow!("No remotes found"));
+        Err(anyhow!("No remotes found"))
     }
 }
 
