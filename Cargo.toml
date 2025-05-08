@@ -1,6 +1,6 @@
 [package]
 name = "git-up"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license-file = "LICENSE"
 description = "Git up command to fetch and update all local branches that track remotes."
