@@ -5,7 +5,7 @@ class GitUp < Formula
 
   if OS.mac?
     url "https://github.com/samandmoore/git-up/releases/download/#{version}/git-up-#{version}-aarch64-apple-darwin.tar.gz"
-    sha256 'e4d230d180857dfa3ccea26176f666cf3e9d2652ee841d5a9b7c20e3768b6d39'
+    sha256 'ce8cfd066f2cb348a8500479f1bf3b6ae4e33bcfc73cb026c663cadfed54b394'
   end
 
   def install
