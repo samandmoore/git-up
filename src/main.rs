@@ -2,7 +2,7 @@ mod git;
 
 use std::collections::HashMap;
 
-use clap::{crate_description, crate_name, crate_version, Command};
+use clap::{Command, crate_description, crate_name, crate_version};
 use colored::*;
 use log::{debug, info};
 

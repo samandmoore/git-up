@@ -1,7 +1,7 @@
 [package]
 name = "git-up"
 version = "0.2.0"
-edition = "2021"
+edition = "2024"
 license-file = "LICENSE"
 description = "Git up command to fetch and update all local branches that track remotes."
 repository = "https://github.com/samandmoore/git-up"
@@ -10,9 +10,9 @@ readme = "README.md"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "4.5.4", features = ["cargo"] }
-anyhow = "1.0.82"
-colored = "2.1.0"
-env_logger = "0.11.3"
-log = "0.4.21"
+clap = { version = "4.5.54", features = ["cargo"] }
+anyhow = "1.0.100"
+colored = "3.1.1"
+env_logger = "0.11.8"
+log = "0.4.29"
 tap = "1.0.1"
